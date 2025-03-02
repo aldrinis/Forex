@@ -1,0 +1,130 @@
+import requests
+
+def fetch_currency_data(api_key):
+    """Retrieve exchange rates and currency names from API"""
+    try:
+        # Fetch latest exchange rates (USD base)
+        rates_response = requests.get(f"https://openexchangerates.org/api/latest.json?app_id={api_key}")
+        rates_response.raise_for_status()
+        rates = rates_response.json()['rates']
+        
+        # Get currency names database
+        names_response = requests.get(f"https://openexchangerates.org/api/currencies.json?app_id={api_key}")
+        names_response.raise_for_status()
+        currencies = names_response.json()
+        
+        return rates, currencies
+        
+    except Exception as e:
+        print(f"API Error: {str(e)}")
+        return None, None
+
+def resolve_currency_code(user_input, currencies):
+    """Convert user input to valid currency code"""
+    user_input = user_input.strip().upper()
+    
+    # Direct code match
+    if user_input in currencies:
+        return user_input
+        
+    # Search currency names
+    for code, name in currencies.items():
+        if user_input in name.upper():
+            return code
+    return None
+
+def get_base_currency(currencies, rates):
+    """Interactive base currency selection"""
+    while True:
+        user_input = input("\nEnter base currency (default: USD): ").strip()
+        if not user_input:
+            return 'USD'
+            
+        code = resolve_currency_code(user_input, currencies)
+        if code and code in rates:
+            return code
+        print("Invalid currency. Try again or press enter for USD.")
+
+def get_conversion_amount():
+    """Get and validate conversion amount"""
+    while True:
+        try:
+            return float(input("\nEnter amount to convert: "))
+        except ValueError:
+            print("Invalid input. Please enter a numerical value.")
+
+def calculate_conversions(base, amount, rates, targets):
+    """Calculate converted amounts for target currencies"""
+    base_rate = rates.get(base)
+    if not base_rate:
+        return {}
+        
+    conversions = {}
+    for currency in targets:
+        if currency == base:
+            conversions[currency] = amount
+            continue
+            
+        target_rate = rates.get(currency)
+        if target_rate:
+            conversions[currency] = amount * (target_rate / base_rate)
+            
+    return conversions
+
+def main():
+    API_KEY = "e188fcc1ed9e4affb94bf21bfa2292f0"
+    DEFAULT_TARGETS = ['USD', 'EUR', 'AUD', 'INR']
+    
+    # Fetch currency data
+    rates, currencies = fetch_currency_data(API_KEY)
+    if not rates or not currencies:
+        return
+    
+    # Base currency selection
+    base = get_base_currency(currencies, rates)
+    print(f"\nSelected base currency: {currencies[base]} ({base})")
+    
+    # Get conversion amount
+    amount = get_conversion_amount()
+    
+    # Calculate default conversions
+    conversions = calculate_conversions(base, amount, rates, DEFAULT_TARGETS)
+    
+    # Display default conversions
+    print("\n[Default Conversions]")
+    for currency in DEFAULT_TARGETS:
+        value = conversions.get(currency, 0)
+        print(f"{currencies[currency]} ({currency}): {value:.2f}")
+    
+    # Additional currency selection
+    additional_currencies = []
+    while True:
+        user_input = input("\nAdd currency (code/name) or 'done': ").strip()
+        if user_input.lower() == 'done':
+            break
+            
+        code = resolve_currency_code(user_input, currencies)
+        if code and code in rates:
+            if code not in DEFAULT_TARGETS + additional_currencies:
+                additional_currencies.append(code)
+                print(f"Added {currencies[code]} ({code})")
+            else:
+                print("Currency already in list")
+        else:
+            print("Invalid currency")
+    
+    # Calculate additional conversions
+    all_targets = DEFAULT_TARGETS + additional_currencies
+    full_conversions = calculate_conversions(base, amount, rates, all_targets)
+    
+    # Display all conversions
+    print("\n[Final Conversion Report]")
+    print(f"Base Currency: {currencies[base]} ({base})")
+    print(f"Original Amount: {amount:.2f}\n")
+    
+    for currency in all_targets:
+        value = full_conversions.get(currency, 0)
+        print(f"{currencies[currency]} ({currency}): {value:.2f}")
+
+if __name__ == "__main__":
+    main()
